@@ -15,6 +15,8 @@ dotenv.config();
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
+// console.log(process.env)
+
 // #####################
 const mqttConfig = {
   broker: process.env.mqtt_broker,
@@ -30,8 +32,8 @@ const mqttConfig = {
 
 // #####################
 const eventHubConfig = {
-  connectionString: process.env.eventhub_conn_str,
-  eventHubName: process.env.eventhub_name
+  connectionString:   process.env.eventhub_conn_str,
+  eventHubName:       process.env.eventhub_name
 };
 
 // #####################
@@ -62,7 +64,9 @@ let currentLogFilepath;             // current log file path
 let batchBuffer             = [];                                                 // in memory buffer for messages to be saved to Clickhouse DB
 let batchBufferMaxSize      = process.env.clickhouse_batch_size || 10000;         // max size of the buffer
 let clickhouse_table_name   = process.env.clickhouse_table_name || 'mqtt';        // table name in clickhouse
-// let clickhouse_database     = process.env.clickhouse_database || 'default';       // database name in clickhouse
+let clickhouse_enabled      = process.env.clickhouse_enabled === 'true';          // enable clickhouse
+
+let eventhub_enabled        = process.env.eventhub_enabled === 'true';
 
 let lastSummaryTime         = Date.now();
 let messageReceived         = 0;                                                  // Counters for I/O summary
@@ -81,18 +85,21 @@ mqttClient = mqtt.connect(mqttConfig.broker, {
 
 // #####################
 // Initialize ClickHouse client
-try {
-  clickhouseClient = createClient(clickhouseConfig);
-  console.log('Connected to ClickHouse');
-}
-catch (error) {
-  console.error('Error connecting to ClickHouse:', error);
+if(clickhouse_enabled){
+  try {
+    clickhouseClient = createClient(clickhouseConfig);
+    console.log('Connected to ClickHouse');
+  }
+  catch (error) {
+    console.error('Error connecting to ClickHouse:', error);
+  }
 }
 
 // #####################
 // Initialize eventHub client
-// eventHubClient = new EventHubProducerClient(eventHubConfig.connectionString, eventHubConfig.eventHubName);
-
+if(eventhub_enabled){
+  eventHubClient = new EventHubProducerClient(eventHubConfig.connectionString, eventHubConfig.eventHubName);
+}
 
 // #####################
 // Initialize log stream if logging is enabled
@@ -109,11 +116,11 @@ function getSydneyDateTime() {
 // #####################
 // create raw data logging stream
 function initLogStream() {
-  const timestamp = new Date().toISOString().replace(/:/g, '-');
-  const logFilename = `raw_data_${timestamp}.jsonl`;
-  currentLogFilepath = path.join(logConfig.filepath, logFilename);
-  logStream = fs.createWriteStream(currentLogFilepath, { flags: 'a' });
-  logRowCount = 0;
+  const timestamp       = new Date().toISOString().replace(/:/g, '-');
+  const logFilename     = `raw_data_${timestamp}.jsonl`;
+  currentLogFilepath    = path.join(logConfig.filepath, logFilename);
+  logStream             = fs.createWriteStream(currentLogFilepath, { flags: 'a' });
+  logRowCount           = 0;
   console.log(`Logging raw data to: ${currentLogFilepath}`);
 }
 
@@ -129,24 +136,25 @@ function logRawData(data) {
   if (logRowCount >= logConfig.maxRows) {
     logStream.end();
     initLogStream();
-    // do clickHouseInsert
   }
 }
 
 // #####################
 // Save data to Clickhouse
 async function clickHouseInsert() {
-  try { clickhouseClient.insert({
-      table: clickhouse_table_name,
-      columns: ['d', 't', 'm'],
-      values: batchBuffer,
-      format: 'JSONEachRow'
-    });
-    console.log(`Inserted ${batchBuffer.length} rows into ClickHouse`);
-    batchBuffer = [];
-  }
-  catch (error) {
-    console.error('Error inserting data into ClickHouse:', error);
+  if(clickhouse_enabled){
+    try { clickhouseClient.insert({
+        table: clickhouse_table_name,
+        columns: ['d', 't', 'm'],
+        values: batchBuffer,
+        format: 'JSONEachRow'
+      });
+      console.log(`Inserted ${batchBuffer.length} rows into ClickHouse`);
+      batchBuffer = [];
+    }
+    catch (error) {
+      console.error('Error inserting data into ClickHouse:', error);
+    }
   }
 }
 
@@ -208,17 +216,21 @@ mqttClient.on('message', async (topic, message) => {
     
     // &&&&&&&&&&&&&&&&&&&&&&&&&
     // (3) send to eventhub
-    // const eventDataBatch = await eventHubClient.createBatch();
-    // if (!eventDataBatch.tryAdd({ body: eventData })) {
-    //   throw new Error("Event data couldn't be added to the batch");
-    // }
-    // await eventHubClient.sendBatch(eventDataBatch);
+    if(eventhub_enabled){
+      const eventDataBatch = await eventHubClient.createBatch();
+      if (!eventDataBatch.tryAdd({ body: eventData })) {
+        throw new Error("Event data couldn't be added to the batch");
+      }
+      await eventHubClient.sendBatch(eventDataBatch);
+    }
 
     // // &&&&&&&&&&&&&&&&&&&&&&&&&
     // (4) save to Clickhouse 
-    batchBuffer.push(eventData);
-    if (batchBuffer.length >= batchBufferMaxSize) {
-      await clickHouseInsert(batchBuffer);
+    if(clickhouse_enabled){
+      batchBuffer.push(eventData);
+      if (batchBuffer.length >= batchBufferMaxSize) {
+        await clickHouseInsert(batchBuffer);
+      }
     }
     
     messageSent++;
@@ -238,8 +250,9 @@ function printIOSummary() {
 
   console.log(`I/O Summary (last ${elapsedSeconds.toFixed(2)} seconds):`);
   console.log(`  Messages Received: ${messageReceived} (${receivedPerSecond.toFixed(2)}/s)`);
-  console.log(`  Messages Sent to Event Hub: ${messageSent} (${sentPerSecond.toFixed(2)}/s)`);
-
+  if(eventhub_enabled){ 
+    console.log(`  Messages passed to Event Hub batch: ${messageSent} (${sentPerSecond.toFixed(2)}/s)`);
+  }
   // Reset counters
   messageReceived = 0;
   messageSent = 0;
@@ -250,20 +263,34 @@ function printIOSummary() {
 // Graceful shutdown
 process.on('SIGINT', async () => {
   console.log('Closing connections...');
-  await clickHouseInsert(batchBuffer);
-  mqttClient.end();
-  try {
-    // await eventHubClient.close();
-    console.log('Event Hub connection closed');
-    await clickhouseClient.close();
-    console.log('ClickHouse connection closed');
+
+  if(clickhouse_enabled){
+    try { 
+      await clickHouseInsert(batchBuffer);
+      await clickhouseClient.close();
+    }
+    catch (error) {
+      console.error('Error closing ClickHouse:', error);
+    }
   }
-  catch (err) {
-    console.error('Error closing connections:', err);
+
+
+  if(eventhub_enabled){
+    try {
+      await eventHubClient.close();
+      console.log('Event Hub connection closed');     
+    }
+    catch (err) {
+      console.error('Error closing Event Hub:', err);
+    }
   }
+
   if (logStream) {
     logStream.end();
   }
+
+  mqttClient.end();
+
   process.exit();
 });
 
@@ -271,8 +298,19 @@ process.on('SIGINT', async () => {
 // Print startup information
 console.log('MQTT to Azure Event Hub bridge started');
 console.log(`Subscribed to MQTT topic: ${mqttConfig.topic}`);
-console.log(`Sending data to Event Hub: ${eventHubConfig.eventHubName}`);
+
+
+if(clickhouse_enabled){
+  console.log(`ClickHouse enabled: ${clickhouseConfig.url}`);
+  console.log(`ClickHouse table: ${clickhouse_table_name}`);
+}
+
+if(eventhub_enabled){
+  console.log(`Sending data to Event Hub: ${eventHubConfig.eventHubName}`);
+}
+
 if (logConfig.enabled) {
   console.log(`Raw data logging enabled. Max rows per file: ${logConfig.maxRows}`);
 }
+
 console.log('Press Ctrl+C to exit');
