@@ -1,0 +1,8 @@
+.env
+**/node_modules
+.DS_Store
+**/.DS_Store
+.vscode
+_LOG_RAW/
+scratch.txt
+secret_keys

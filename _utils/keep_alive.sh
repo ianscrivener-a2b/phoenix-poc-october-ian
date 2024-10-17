@@ -1,0 +1,1 @@
+( first=""; while true; do if [[ -n "$first" ]]; then echo '{ "keepalive-options" : ["suppress-republish"] }'; else echo ""; fi ; first=true; sleep 30; done ) | mosquitto_pub -t 'R/48e7da897a51>/keepalive' -l -h '192.168.8.60'

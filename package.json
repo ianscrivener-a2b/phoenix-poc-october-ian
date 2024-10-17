@@ -1,0 +1,22 @@
+{
+  "name": "poc_mqtt_to_event_hub",
+  "version": "0.0.1",
+  "main": "app.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@azure/event-hubs": "^5.12.2",
+    "@clickhouse/client": "^1.6.0",
+    "applicationinsights": "^3.3.0",
+    "dayjs": "^1.11.13",
+    "dotenv": "^16.4.5",
+    "mqtt": "^5.10.1",
+    "node-fetch": "^3.3.2",
+    "typescript": "^5.6.3"
+  }
+}
