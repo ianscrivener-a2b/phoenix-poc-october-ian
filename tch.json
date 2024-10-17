@@ -1,0 +1,10 @@
+Received event: {
+    "specversion": "1.0",
+    "source": "arb1-egmqtt-nmsp002-dev-ae",
+    "time": "2024-10-17T06:55:43.903Z",
+    "id": "e2c1544a-356f-478b-a2b9-4f8bbd91ce47",
+    "subject": "booking/rx/happycabs/fleet001/75c238d5-9557-4ffe-a002-01c5e9ef9974",
+    "datacontenttype": "application/octet-stream",
+    "type": "MQTT.EventPublished",
+    "data_base64": "eyJ0ZW5hbnRJZCI6ImhhcHB5Y2FicyIsImZsZWV0SWQiOiJmbGVldDAwMSIsImpvYklkIjoiNzVjMjM4ZDUtOTU1Ny00ZmZlLWEwMDItMDFjNWU5ZWY5OTc0Iiwiam9iU3RhdHVzIjo1LCJqb2JUaW1lIjoic3RyaW5nIiwiam9iVHlwZSI6InN0cmluZyIsImN1c3RvbWVySWQiOiJzdHJpbmciLCJkZXN0aW5hdGlvbiI6IjI5OCBTaWx2ZXIgTW91bnRhaW4gRHJpdmUsIEJ1cm5pZSwgVGFzbWFuaWEgVEFTIDk1MTQiLCJvcmlnaW4iOiIxNzIgV2luZHkgVmFsbGV5IFBsYWNlLCBIb2JhcnQsIFRhc21hbmlhIFRBUyA5MDMzIiwiZHJpdmVySWQiOiJEUjAwMDEiLCJkcml2ZXJTdGF0dXMiOjEsInZlaGljbGVJZCI6IlZFSElDTEVYIiwiY29ycmVsYXRpb25JZCI6InN0cmluZyIsImJvb2tpbmdSZWYiOiJiNjFiODU1Ni0xMzBhLTQ4NmUtOTliZi1jZmFmMWIzMTAzYzkifQ=="
+}
